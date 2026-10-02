@@ -1,0 +1,64 @@
+# Environment files and credentials (including unreviewed example files)
+.env*
+*.env
+local.properties
+key.properties
+*.jks
+*.keystore
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local databases and transaction sidecars
+*.db
+*.db-*
+*.sqlite*
+
+# Build products and dependency/tool caches
+build/
+dist/
+.dart_tool/
+.gradle/
+.kotlin/
+.cxx/
+.venv/
+venv/
+node_modules/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.flutter-plugins*
+coverage/
+htmlcov/
+.coverage
+.coverage.*
+*.apk
+*.aab
+*.ipa
+*.log
+
+# Machine-specific IDE files
+.idea/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+Thumbs.db
+
+# Private runtime material (do not hide future feature modules)
+/uploads/
+/evidence/
+/exports/
+/backend/uploads/
+/backend/evidence/
+/backend/exports/
+secrets/
+credentials/
+
+# Local agent/tool state
+.opencode/
+__agent__/
+opencode.jsonc
