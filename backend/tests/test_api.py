@@ -1,15 +1,22 @@
 def register(client):
     response = client.post("/auth/register", json={"email": "user@example.com", "password": "password123"})
     assert response.status_code == 201
-    return response.json()["access_token"]
+    body = response.json()
+    assert set(body) == {"access_token", "token_type"}
+    assert body["token_type"] == "bearer"
+    assert body["access_token"]
+    return body["access_token"]
 
 
 def test_register_login_and_analysis(client):
     token = register(client)
     login = client.post("/auth/login", json={"email": "user@example.com", "password": "password123"})
     assert login.status_code == 200
+    assert set(login.json()) == {"access_token", "token_type"}
+    assert login.json()["token_type"] == "bearer"
     response = client.post("/analysis/analyze", headers={"Authorization": f"Bearer {token}"}, json={"content": "Urgent: send a gift card and your OTP immediately: https://bad.example"})
     assert response.status_code == 200
+    assert set(response.json()) == {"score", "verdict", "flags"}
     assert response.json()["verdict"] == "high-risk"
     assert response.json()["score"] == 85
 
@@ -31,6 +38,7 @@ def test_history_is_authenticated_paginated_and_searchable(client):
 
     response = client.get("/analysis/history?page=1&page_size=1&search=urgent", headers=headers)
     assert response.status_code == 200
+    assert set(response.json()) == {"items", "page", "page_size", "total"}
     assert response.json()["total"] == 1
     assert response.json()["items"][0]["content"] == "second urgent message"
     assert client.get("/analysis/history").status_code == 401

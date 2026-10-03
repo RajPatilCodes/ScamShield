@@ -14,6 +14,21 @@ Map<String, dynamic> mediaResponse() => {'filename': 'photo.png', 'content_type'
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+  test('authenticate sends the current login contract', () async {
+    final api = ApiService(client: MockClient((request) async {
+      expect(request.method, 'POST');
+      expect(request.url.path, '/auth/login');
+      expect(request.headers['content-type'], 'application/json');
+      expect(jsonDecode(request.body), {
+        'email': 'test@example.com',
+        'password': 'password123',
+      });
+      return http.Response(jsonEncode({'access_token': 'real-token', 'token_type': 'bearer'}), 200);
+    }));
+
+    expect(await api.authenticate('test@example.com', 'password123'), true);
+    expect(await api.isSignedIn(), true);
+  });
   test('failed and malformed login never create a session', () async {
     for (final response in [http.Response('Unavailable', 503), http.Response('{}', 200)]) {
       final api = ApiService(client: MockClient((_) async => response));

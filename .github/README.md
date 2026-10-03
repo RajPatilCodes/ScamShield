@@ -1,23 +1,23 @@
-# Planned repository automation
+# Repository automation
 
-No GitHub Actions workflow, deployment, branch protection, secret-scanning service, or private vulnerability-reporting configuration has been established by Phase 0. This file does not enable any GitHub setting.
+Phase 1 adds `.github/workflows/ci.yml` with non-production backend and Flutter checks. The workflow does not deploy, publish artifacts, access production credentials, or enable branch protection, secret-scanning services, or private vulnerability reporting.
 
-## Planned after the development baseline is verified
+## Checks
 
-- Backend lint/test checks in an isolated synthetic-data environment.
-- Flutter analysis and tests with an explicitly supported toolchain.
-- Secret detection and dependency/security checks with reviewed configuration.
-- API-contract and authorization regression checks.
-- Platform build verification when signing and runner requirements are approved.
+- Backend dependencies are installed from `backend/requirements.lock` with hashes.
+- Backend tests run with synthetic data and an isolated temporary SQLite database.
+- Flutter 3.44.8 resolves `mobile/pubspec.lock` with `--enforce-lockfile`.
+- Flutter analyzer and tests run from `mobile/`.
 
-Do not add placeholder workflows that imply tests pass. Do not enable deployment or publish artifacts automatically as part of repository establishment.
+The workflow is a reproducibility check, not a production-readiness or security-audit claim. Android release signing, deployment, dependency/security scanning, authorization regression coverage, and platform release checks require separate implementation and approval.
 
 ## Security boundaries
 
+- Workflow permissions are read-only.
 - Untrusted pull requests must not receive privileged credentials.
-- Minimize workflow permissions and pin third-party actions to reviewed immutable revisions.
-- Never print credentials, private report contents, evidence, or secret-bearing configuration.
-- Production environments, signing, approvals, and release automation require separate approval.
+- Third-party actions are pinned to reviewed immutable commit SHAs.
+- Logs must not contain credentials, private report content, evidence, or secret-bearing configuration.
+- No workflow publishes APKs or deploys services.
 - Establish a real private disclosure process before making any claim that one exists; see `../SECURITY.md`.
 
 Source of truth: `../docs/implementation-blueprint.md`.

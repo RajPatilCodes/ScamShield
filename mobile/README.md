@@ -2,6 +2,14 @@
 
 Flutter Android client with an original, locally authored shield/S vector launcher icon and the launcher label **ScamShield**.
 
+## Supported development baseline
+
+- Flutter 3.44.8 stable
+- Dart 3.12.2
+- Dart SDK constraint: `>=3.12.0 <4.0.0`
+
+The exact dependency selection is committed in `pubspec.lock`. See [`../docs/development-baseline.md`](../docs/development-baseline.md) and [`../docs/api-contracts.md`](../docs/api-contracts.md) for the reproducible checks and API boundary.
+
 ## Capabilities
 
 - Register/sign in against `/auth/register` and `/auth/login`; real server tokens are required. Network, authentication, and malformed-response errors are shown; there are no fake sessions or demo scan results.
@@ -14,7 +22,7 @@ Flutter Android client with an original, locally authored shield/S vector launch
 ## Run
 
 ```bash
-flutter pub get
+flutter pub get --enforce-lockfile
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000
 ```
 
@@ -25,9 +33,9 @@ The default API URL targets a local backend from an Android emulator. A physical
 ```bash
 flutter analyze
 flutter test
-flutter build apk --release --dart-define=API_BASE_URL=https://your-api.example.com
+flutter build apk --debug --dart-define=API_BASE_URL=http://10.0.2.2:8000
 ```
 
-Output: `build/app/outputs/flutter-apk/app-release.apk`. The current Gradle release configuration signs with the development debug key; configure your own release signing before distribution. API_BASE_URL is compiled in; without an override the APK targets the emulator address above. iOS camera/photo permission configuration and device testing are outside this Android implementation.
+The debug output is under `build/app/outputs/flutter-apk/`. The current Gradle release configuration signs with the development debug key; configure your own release signing before distribution. API_BASE_URL is compiled in; without an override the APK targets the emulator address above. iOS camera/photo permission configuration and device testing are outside this Android implementation. Phase 1 does not claim release signing or production readiness.
 
 The session token currently uses SharedPreferences, not hardware-backed secure storage. Text scores are warning heuristics, not proof of fraud or safety.

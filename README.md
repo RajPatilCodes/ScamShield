@@ -1,6 +1,6 @@
 # ScamShield
 
-## V2 capabilities and current APK
+## Current capabilities and local APK
 
 - Branded ScamShield Android launcher name and original shield icon.
 - Edge-to-edge Material 3 interface, dark mode, dashboard, scan, history and profile.
@@ -12,7 +12,7 @@
 APK: `mobile/build/app/outputs/flutter-apk/app-release.apk`.
 This build uses development signing and the default Android emulator backend URL (`http://10.0.2.2:8000`). It is not a standalone offline antivirus or a production deployment. A physical phone needs a rebuild pointing to a reachable HTTPS backend. There is no preset account: register against the running backend.
 
-Validation: backend agent reported 39 passing tests in an isolated environment (with bcrypt 3.2.2 for Passlib compatibility); mobile analyzer and 6 tests passed and release APK built. Camera use has not been tested on a physical device. See `mobile/README.md` for mobile-specific setup.
+The Phase 0 handoff recorded historical backend and mobile validation results, but Phase 1 reruns and records checks separately. Camera use has not been tested on a physical device. See `docs/development-baseline.md` and `mobile/README.md` for current setup and verification status.
 
 ScamShield is a privacy-first mobile app that analyzes suspicious messages and URLs, explains the risk, and gives safe next steps.
 
@@ -28,8 +28,9 @@ ScamShield is a privacy-first mobile app that analyzes suspicious messages and U
 ```bash
 cd backend
 python -m venv .venv
-.venv\Scripts\activate       # Windows
-pip install -r requirements.txt
+# Windows: .venv\\Scripts\\activate
+# WSL/Linux: source .venv/bin/activate
+pip install --require-hashes -r requirements.lock
 uvicorn app.main:app --reload
 ```
 
@@ -39,7 +40,7 @@ Open API docs at `http://127.0.0.1:8000/docs`.
 
 ```bash
 cd mobile
-flutter pub get
+flutter pub get --enforce-lockfile
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000
 ```
 
@@ -49,6 +50,8 @@ For a physical Android device, replace the URL with the computer's LAN IP. Build
 flutter build apk --release --dart-define=API_BASE_URL=https://your-api.example.com
 ```
 
-## Security notes
+## Verification and security notes
 
-Set a long random `SECRET_KEY` in production, use HTTPS, move to PostgreSQL, and add rate limiting and abuse monitoring before public release. The detector is a safety aid, not a guarantee; users should verify important requests independently.
+Run `python -m pytest` from `backend/`, and `flutter analyze` plus `flutter test` from `mobile/`. The supported baseline, actual results, and unavailable-toolchain gaps are recorded in [`docs/development-baseline.md`](docs/development-baseline.md). Current request/response behavior and future `/v1` boundaries are documented in [`docs/api-contracts.md`](docs/api-contracts.md).
+
+Set a long random `JWT_SECRET` in production, use HTTPS, move to PostgreSQL, and add rate limiting and abuse monitoring before public release. The detector is a safety aid, not a guarantee; users should verify important requests independently. Phase 1 does not implement production authentication, migrations, or deployment controls.

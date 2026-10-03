@@ -11,13 +11,28 @@ Do not move or duplicate those suites merely to populate this directory.
 
 ## Execution boundary
 
-No application tests were run during Phase 0. Repository inspection and staging are not evidence of passing application tests.
+Phase 1 runs only component checks in isolated development environments. Backend tests use a temporary synthetic SQLite database and never use the local application database. Flutter commands write tool caches/build output; run them from the approved mobile environment. Never point tests at production or customer data.
 
-Backend `conftest.py` selects a file-backed test database and drops/recreates its tables. Flutter commands also write caches and build outputs. Establish an isolated, synthetic-data environment and inspect configuration before executing either suite. Never point tests at production, the existing local application database, or customer data.
+The baseline checks are `python -m pytest` from `backend/`, and `flutter pub get --enforce-lockfile`, `flutter analyze`, and `flutter test` from `mobile/`. Actual results and unavailable-toolchain gaps are recorded in [`../docs/development-baseline.md`](../docs/development-baseline.md).
 
-The existing documented checks are `python -m pytest` from `backend/`, and `flutter analyze` / `flutter test` from `mobile/`, using the approved development environment. Their current toolchain compatibility and results remain unverified.
+## Phase 1 verification results
 
-## Planned coverage
+Results below are from the verification run for this Phase 1 handoff:
+
+| Check | Result |
+| --- | --- |
+| Backend locked environment | Passed with CPython 3.12.13 and `backend/requirements.lock`; 38 packages installed and `uv pip check` passed. |
+| Backend tests | Passed: 39 tests, 2 deprecation warnings. |
+| Flutter dependency resolution | Passed with Flutter 3.44.8/Dart 3.12.2 and `--enforce-lockfile`; `mobile/pubspec.lock` was unchanged. |
+| Flutter analyzer | Passed: no issues found. |
+| Flutter tests | Passed: all 8 tests. |
+| Android wrapper/debug build | Passed: Gradle 9.1.0 wrapper check and debug APK build completed using Windows JBR 21.0.10. |
+| CI workflow YAML | Passed static PyYAML parsing and required structure/pinned-action checks; dedicated YAML linters were unavailable. |
+| Docker/Compose execution | Unavailable because Docker is not installed/connected in the current WSL 2 distro; the Compose file was statically parsed successfully. |
+
+The default WSL Python 3.10.12 environment could not run pytest because the module is not installed and does not satisfy the locked dependency set. The supported Python 3.12 environment was used for the passing backend result. The direct WSL Flutter launcher also failed on CRLF shell-script line endings, so the available Windows Flutter launcher was used. See [`../docs/development-baseline.md`](../docs/development-baseline.md) for commands and exact limitations.
+
+## Planned coverage for later phases
 
 - Two-user and multi-role isolation for every private object, list, search, count, export, and download.
 - Session expiry, refresh rotation, revocation, email verification, and account recovery.

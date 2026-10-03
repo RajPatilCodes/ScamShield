@@ -1,5 +1,9 @@
 import os
-os.environ["DATABASE_URL"] = "sqlite:///./test_scamshield.db"
+import tempfile
+from pathlib import Path
+
+_TEST_DB_DIR = tempfile.TemporaryDirectory(prefix="scamshield-tests-")
+os.environ["DATABASE_URL"] = f"sqlite:///{(Path(_TEST_DB_DIR.name) / 'test.db').as_posix()}"
 os.environ["JWT_SECRET"] = "test-secret"
 
 import pytest
