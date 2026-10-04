@@ -2,9 +2,9 @@
 
 ## Contract status
 
-This document freezes the current implemented API for Phase 1 development compatibility and records the approved future boundary. It is not an OpenAPI implementation, a production SLA, or a claim that the planned `/v1` operations exist.
+Phase 2 versions authentication/session operations only. The analysis, history, media, upload and health paths and product contracts below remain the Phase 1 contracts. This is not a production SLA or a claim that other planned `/v1` modules exist.
 
-Current routes are unversioned. No `/v1` endpoint is added by Phase 1.
+Authentication uses `/v1/auth`; legacy `/auth/register` and `/auth/login` are no longer available. Other current routes remain unversioned.
 
 Common current error responses are FastAPI responses of the form:
 
@@ -26,7 +26,7 @@ Returns HTTP `200`:
 
 This is a static liveness response. It does not establish database readiness.
 
-### `POST /auth/register`
+### `POST /v1/auth/register`
 
 Request content type: `application/json`.
 
@@ -37,33 +37,62 @@ Request content type: `application/json`.
 }
 ```
 
-Current validation:
+Authentication validation:
 
 - email is standards-aware validated and stored lowercase;
-- password length is 8–128 characters;
-- the current schema does not reject unknown fields;
-- no email verification is performed.
+- email length is at most 255 characters;
+- password length is 8–1,024 characters, with a 4,096-byte UTF-8 cap;
+- unknown write fields are rejected;
+- registration requires single-use email verification before login can create a session.
 
 Success: HTTP `201`.
 
 ```json
 {
-  "access_token": "<server-issued-token>",
-  "token_type": "bearer"
+  "message": "If eligible, check your email for further instructions."
 }
 ```
 
-The current endpoint issues a bearer token immediately. There is no server-tracked session or refresh-token contract yet.
+New and duplicate requests return the same acknowledgement. Registration never creates an authenticated session or returns an access/refresh credential. Development/tests capture verification messages in memory; responses do not include challenge secrets.
 
-### `POST /auth/login`
+### `POST /v1/auth/login`
 
-Uses the same request and response fields as registration.
+Uses the same credentials request as registration. Active verified accounts with valid passwords receive:
+
+```json
+{
+  "access_token": "<ten-minute-access-JWT>",
+  "token_type": "bearer",
+  "refresh_token": "<opaque-single-use-credential>",
+  "session_id": "<UUID>",
+  "expires_in": 600
+}
+```
 
 Success: HTTP `200`.
 
 Invalid credentials: HTTP `401` with a sanitized `detail` message.
 
-The current endpoint has no refresh, rotation, revocation, device, or session-list behavior.
+Invalid, unknown, unverified and inactive accounts have the same sanitized authentication failure. Five failed logins per account+connection-IP in fifteen minutes block further login attempts with `429` / `Retry-After` until expiry. Forwarded-IP headers are not trusted for these buckets.
+
+### Other implemented authentication/session routes
+
+| Method/path under `/v1/auth` | JSON request | Success |
+| --- | --- | --- |
+| `POST /verification/request` | `{"email":"user@example.com"}` | `202`, generic acknowledgement |
+| `POST /verification/confirm` | `{"token":"<challenge>"}` | `204`, no session created |
+| `POST /recovery/request` | `{"email":"user@example.com"}` | `202`, generic acknowledgement |
+| `POST /recovery/confirm` | `{"token":"<challenge>","password":"<replacement>"}` | `204`, all account sessions revoked |
+| `POST /refresh` | `{"refresh_token":"<credential>"}` | `200`, rotated login response shape |
+| `POST /logout` | `{"refresh_token":"<credential>"}` | `204`, idempotent family revocation |
+| `GET /sessions` | Access bearer header | `200`, `{"items":[{"id":"<UUID>","created_at":0,"idle_expires_at":0,"absolute_expires_at":0}]}` |
+| `DELETE /sessions/{session_id}` | Access bearer header | `204`; non-owner/unknown IDs return `404` |
+
+Session-list timestamps are Unix seconds; only the owner's currently live sessions are included. Recovery challenges expire after thirty minutes; verification expiry is explicitly configured. Both purposes are single-use and cannot be interchanged. Challenge requests share the approved three-per-fifteen-minute account+IP protection. Recovery delivery outages retain a generic response and log only a sanitized operational event; they do not commit an undelivered challenge.
+
+Refresh has a seven-day idle and thirty-day absolute boundary. Each success atomically consumes its credential and creates one successor. Confirmed reuse revokes the entire family; a concurrent loser therefore invalidates the winner's returned credentials too. Unknown/expired/revoked refresh credentials are rejected; no additional numeric refresh limit was invented.
+
+Logout accepts a current or consumed family credential solely to revoke it, including after a lost refresh response. Unknown credentials also return `204`. This does not grant authentication. All authentication responses use `Cache-Control: no-store`; sanitized errors retain the `detail` envelope. See `phase-2-authentication.md` for configuration and test evidence.
 
 ### `POST /analysis/analyze`
 
@@ -219,9 +248,9 @@ The approved target API namespace is `/v1`. Phase 1 records the following rules 
 - explicit unknown/failure analysis states;
 - versioned assessment explanations and capability disclosures.
 
-Future modules include identity/sessions, catalog/resources, assessments, reports, timelines, evidence, checklists, notifications, privacy jobs, support, and scoped staff operations. They are not implemented by this baseline.
+Future non-authentication modules include catalog/resources, assessments, reports, timelines, evidence, checklists, notifications, privacy jobs, support, and scoped staff operations. They are not implemented by Phase 2. Authentication/session operations are limited to the implemented contract above.
 
-The exact future error envelope, session/refresh response shape, pagination cursor encoding, idempotency header name, and concurrency field require approval before Phase 2 implementation. This document does not invent those details.
+Phase 2 authentication's response shape and sanitized `detail` errors are specified above. Pagination cursors, idempotency headers, concurrency fields, and general contracts for future non-authentication modules are not implemented by Phase 2.
 
 ## Flutter integration contract
 
@@ -230,7 +259,7 @@ The current Flutter client uses `ApiService` with these rules:
 - `API_BASE_URL` is supplied at build/run time with `--dart-define`;
 - the current Android emulator default is `http://10.0.2.2:8000`;
 - deployed builds must use HTTPS;
-- current routes are the unversioned routes documented above;
+- authentication routes use `/v1/auth`; analysis/media/history routes remain unversioned;
 - bearer tokens are sent in `Authorization` headers;
 - requests time out after 90 seconds;
 - failed or malformed authentication responses do not create a local session;
@@ -239,6 +268,6 @@ The current Flutter client uses `ApiService` with these rules:
 - media results must preserve the `unverified`/metadata-only semantics;
 - URLs are sent as text and are not opened by the API client.
 
-The current token is stored in `SharedPreferences` and logout only removes the local token. This is a known Phase 2 security item, not a Phase 1 contract change.
+Access tokens remain in memory. API-bound refresh credentials use OS-protected storage, and the legacy SharedPreferences bearer key is removed. Session restoration rotates the stored credential. Refresh is coordinated, `401` handling is centralized, and invalidation removes all private navigation/screen state. Logout requires server revocation; an offline pending revocation is shown honestly and cannot restore a session.
 
 Future Flutter `/v1` integration must use typed DTOs, server timestamps and assessment versions, server-authoritative ownership/status, explicit unknown/error states, and reauthorization before opening private destinations.

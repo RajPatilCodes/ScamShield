@@ -9,8 +9,8 @@
 - Media screening checks file type/signature consistency and computes SHA-256. It does not perform OCR, inspect video frames, or scan for malware. An unverified result does not mean safe.
 - Authentication and network errors are shown honestly; no simulated successful login.
 
-APK: `mobile/build/app/outputs/flutter-apk/app-release.apk`.
-This build uses development signing and the default Android emulator backend URL (`http://10.0.2.2:8000`). It is not a standalone offline antivirus or a production deployment. A physical phone needs a rebuild pointing to a reachable HTTPS backend. There is no preset account: register against the running backend.
+Verified Phase 2 debug APK: `mobile/build/app/outputs/flutter-apk/app-debug.apk`.
+Debug HTTP is restricted to the Android emulator address `http://10.0.2.2:8000`. Non-debug credential flows require HTTPS. There is no preset account: register, verify email, then sign in. Older release artifacts are not evidence of Phase 2 security. This app is not a standalone offline antivirus or a production deployment.
 
 The Phase 0 handoff recorded historical backend and mobile validation results, but Phase 1 reruns and records checks separately. Camera use has not been tested on a physical device. See `docs/development-baseline.md` and `mobile/README.md` for current setup and verification status.
 
@@ -31,6 +31,8 @@ python -m venv .venv
 # Windows: .venv\\Scripts\\activate
 # WSL/Linux: source .venv/bin/activate
 pip install --require-hashes -r requirements.lock
+# Configure the explicit authentication inputs and migrate a disposable
+# development database as described in docs/phase-2-authentication.md.
 uvicorn app.main:app --reload
 ```
 
@@ -44,7 +46,7 @@ flutter pub get --enforce-lockfile
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000
 ```
 
-For a physical Android device, replace the URL with the computer's LAN IP. Build a release APK with:
+For a physical Android device, use a reachable HTTPS API. Build a release APK with:
 
 ```bash
 flutter build apk --release --dart-define=API_BASE_URL=https://your-api.example.com
@@ -54,4 +56,4 @@ flutter build apk --release --dart-define=API_BASE_URL=https://your-api.example.
 
 Run `python -m pytest` from `backend/`, and `flutter analyze` plus `flutter test` from `mobile/`. The supported baseline, actual results, and unavailable-toolchain gaps are recorded in [`docs/development-baseline.md`](docs/development-baseline.md). Current request/response behavior and future `/v1` boundaries are documented in [`docs/api-contracts.md`](docs/api-contracts.md).
 
-Set a long random `JWT_SECRET` in production, use HTTPS, move to PostgreSQL, and add rate limiting and abuse monitoring before public release. The detector is a safety aid, not a guarantee; users should verify important requests independently. Phase 1 does not implement production authentication, migrations, or deployment controls.
+Phase 2 adds `/v1/auth` verification/recovery, Argon2id password hashing, rotating server-tracked sessions, authentication abuse limits, secure mobile storage, and explicit Alembic migrations. Analysis/media/upload routes keep their existing contracts. See [`docs/phase-2-authentication.md`](docs/phase-2-authentication.md) for configuration, synthetic email capture, database safety, exact verification results, and remaining gaps. The detector is a safety aid, not a guarantee; users should verify important requests independently.

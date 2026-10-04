@@ -4,22 +4,46 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mime/mime.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../models/scan_result.dart';
+import 'session_controller.dart';
+import 'session_store.dart';
 
 class ApiService {
-  ApiService({http.Client? client}) : _client = client ?? http.Client();
+  ApiService({http.Client? client, SessionStore? sessionStore, String apiUrl = baseUrl}) : _client = client ?? http.Client(), _baseUrl = apiUrl {
+    sessions = SessionController(client: _client, store: sessionStore ?? SessionStore(), apiUrl: apiUrl);
+  }
   final http.Client _client;
+  final String _baseUrl;
+  late final SessionController sessions;
   static const baseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://10.0.2.2:8000');
 
   Future<bool> isSignedIn() async {
-    final token = (await SharedPreferences.getInstance()).getString('token');
-    return token != null && token.isNotEmpty && token != 'local-session';
+    return sessions.isAuthenticated;
   }
-  Future<void> signOut() async => (await SharedPreferences.getInstance()).remove('token');
+  Future<bool> restoreSession() => sessions.restore();
+  Future<void> signOut() async {
+    try {
+      await sessions.logout();
+    } catch (_) {
+      // Central state is already signed out; the visible notice and protected
+      // pending credential retain truthful server-revocation status for retry.
+    }
+  }
   Future<Map<String, String>> _headers() async {
-    if (!await isSignedIn()) throw const MediaScanException('Please sign in again.');
-    return {'Authorization': 'Bearer ${(await SharedPreferences.getInstance()).getString('token')}'};
+    return {'Authorization': 'Bearer ${await sessions.accessToken()}'};
+  }
+  Future<http.Response> _authenticated(Future<http.Response> Function(Map<String, String>) send) async {
+    final original = await _headers();
+    final sessionId = sessions.session?.sessionId;
+    var response = await send(original);
+    if (!sessions.isAuthenticated || sessions.session?.sessionId != sessionId) throw const MediaScanException('Please sign in again.');
+    if (response.statusCode == 401) {
+      if (original['Authorization'] == 'Bearer ${sessions.session?.accessToken}') await sessions.refresh();
+      response = await send(await _headers());
+      if (response.statusCode == 401) await sessions.invalidate();
+    }
+    if (response.statusCode != 401 && sessions.session?.sessionId != sessionId) throw const MediaScanException('Please sign in again.');
+    return response;
   }
   void _check(http.Response response) {
     if (response.statusCode >= 200 && response.statusCode < 300) return;
@@ -43,25 +67,40 @@ class ApiService {
       throw const MediaScanException('The service returned an invalid response.');
     } on TypeError {
       throw const MediaScanException('The service returned an unexpected response.');
+    } on SessionException catch (error) {
+      throw MediaScanException(error.message);
     }
   }
   Future<bool> authenticate(String email, String password, {bool register = false}) => _request(() async {
-    final response = await _client.post(Uri.parse('$baseUrl/auth/${register ? 'register' : 'login'}'), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'email': email.trim(), 'password': password}));
-    _check(response);
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
-    final token = body['access_token'] as String?;
-    if (token == null || token.isEmpty || token == 'local-session') throw const MediaScanException('The service did not return a valid session.');
-    await (await SharedPreferences.getInstance()).setString('token', token);
+    if (register) {
+      await sessions.store.removeLegacyToken();
+      await sessions.post('register', {'email': email.trim(), 'password': password});
+      return false;
+    }
+    await sessions.login(email, password);
     return true;
   });
+  Future<void> requestVerification(String email) => _request(() async {
+    await sessions.post('verification/request', {'email': email.trim()});
+  });
+  Future<void> verifyEmail(String token) => _request(() async {
+    await sessions.post('verification/confirm', {'token': token.trim()});
+  });
+  Future<void> requestRecovery(String email) => _request(() async {
+    await sessions.post('recovery/request', {'email': email.trim()});
+  });
+  Future<void> recoverPassword(String token, String password) => _request(() async {
+    await sessions.post('recovery/confirm', {'token': token.trim(), 'password': password});
+    await sessions.invalidate();
+  });
   Future<ScanResult> scan(String content) => _request(() async {
-    final response = await _client.post(Uri.parse('$baseUrl/analysis/analyze'), headers: {...await _headers(), 'Content-Type': 'application/json'}, body: jsonEncode({'content': content}));
+    final response = await _authenticated((headers) => _client.post(Uri.parse('$_baseUrl/analysis/analyze'), headers: {...headers, 'Content-Type': 'application/json'}, body: jsonEncode({'content': content})));
     _check(response);
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return ScanResult(score: body['score'] as int, level: body['verdict'] as String, reasons: List<String>.from(body['flags'] as List), actions: const ['Do not share passwords or verification codes', 'Verify the sender using a trusted channel'], content: content, createdAt: DateTime.now());
   });
   Future<List<ScanResult>> history() => _request(() async {
-    final response = await _client.get(Uri.parse('$baseUrl/analysis/history?page_size=100'), headers: await _headers());
+    final response = await _authenticated((headers) => _client.get(Uri.parse('$_baseUrl/analysis/history?page_size=100'), headers: headers));
     _check(response);
     return ((jsonDecode(response.body) as Map<String, dynamic>)['items'] as List).map((e) => ScanResult.fromJson(e as Map<String, dynamic>)).toList();
   });
@@ -69,10 +108,12 @@ class ApiService {
     final length = await file.length();
     if (length > 20 * 1024 * 1024) throw const MediaScanException('Choose a file no larger than 20 MiB.');
     if (length == 0) throw const MediaScanException('This file is empty. Choose another file.');
-    final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/analysis/media'));
-    request.headers.addAll(await _headers());
-    request.files.add(http.MultipartFile('file', file.openRead(), length, filename: file.name, contentType: MediaType.parse(lookupMimeType(file.name) ?? 'application/octet-stream')));
-    final response = await http.Response.fromStream(await _client.send(request));
+    final response = await _authenticated((headers) async {
+      final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/analysis/media'));
+      request.headers.addAll(headers);
+      request.files.add(http.MultipartFile('file', file.openRead(), length, filename: file.name, contentType: MediaType.parse(lookupMimeType(file.name) ?? 'application/octet-stream')));
+      return http.Response.fromStream(await _client.send(request));
+    });
     _check(response);
     return ScanResult.fromMediaJson(jsonDecode(response.body) as Map<String, dynamic>);
   });

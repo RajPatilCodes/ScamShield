@@ -10,13 +10,11 @@ The application provides authenticated text heuristics and metadata-only media s
 
 Known release blockers include:
 
-- Development signing-secret defaults and development Compose credentials.
-- Root README configuration guidance names `SECRET_KEY`, while the application reads `JWT_SECRET`. The original README is preserved during Phase 0; correcting it belongs to approved implementation work.
-- Mobile bearer-token storage in SharedPreferences.
-- Local-only logout without server-side session revocation.
-- No application-level rate-limit or comprehensive abuse-control implementation.
+- Deployment/Compose configuration has not been converted to the new explicit authentication settings; production infrastructure was outside Phase 2.
+- PostgreSQL integration, live configured SMTP delivery, and physical-device credential-storage behavior have not been verified in this implementation environment.
+- Authentication limits cover the approved account+IP login-failure and challenge-request buckets. Broader product/service abuse controls remain future work.
 - No implemented retention/deletion workflow for saved text.
-- Debug signing for Android release builds and an HTTP LAN exception in the main network configuration.
+- Debug signing for Android release builds; signing infrastructure was outside Phase 2.
 - Two upload contracts with different limits and validation strength.
 
 Metadata, filename, MIME type, file signature, and SHA-256 cannot establish that a file is safe or truthful. Keyword scores are not verified fraud findings or calibrated probabilities. Phone formatting must never be represented as proof of identity.
@@ -37,8 +35,7 @@ If a real secret is discovered, stop publication, notify the owner through an ap
 
 - Server-derived ownership and authorization on every private object and subresource.
 - Scoped staff access, strong staff authentication, and audited transitions.
-- Secure sessions, refresh rotation, revocation, verification, and recovery.
-- Production startup failure when required secrets are missing or unsafe.
+- Phase 2 implements sessions, refresh rotation/replay revocation, verification/recovery, required access claims, active account/session checks, and production configuration rejection. See the implementation record below.
 - Strict schemas, bounded requests, rate limits, idempotency, and concurrency control.
 - No automatic fetching of arbitrary submitted URLs.
 - Private evidence quarantine and isolated, resource-bounded processing.
@@ -47,3 +44,15 @@ If a real secret is discovered, stop publication, notify the owner through an ap
 - Production platform configuration, dependency checks, security testing, and incident procedures.
 
 These controls require implementation and verification under `docs/implementation-blueprint.md`. No production infrastructure or external security assessment is asserted to exist.
+
+## Phase 2 implementation record
+
+New/replaced passwords use Argon2id with explicit configured costs. Legacy bcrypt is accepted only for complete inputs of at most 72 UTF-8 bytes and is rehashed after successful verified-account login. Longer legacy inputs must use recovery; silently verifying their truncated prefixes is prohibited. General password limits are 1,024 characters / 4,096 UTF-8 bytes.
+
+Access tokens last ten minutes and require subject, session ID, token ID, issuer/audience, access purpose, and timing claims. The backend checks active verified accounts and live owner-matching sessions on every protected request. Refresh credentials are opaque, hashed at rest, single-use, with seven-day idle / thirty-day absolute session expiry. Confirmed replay revokes the session family, including a concurrent winner's successor. Logout and successful recovery revoke server state.
+
+Mobile access tokens stay in memory. Only API-bound refresh credentials and pending-revocation state go to OS-protected storage. Legacy plaintext bearer storage is removed rather than migrated. Failed/uncertain refresh cannot silently retry a consumed credential. Offline logout clears private UI state, retains only a protected pending-revocation credential, visibly reports pending server confirmation, and retries revocation before allowing restoration or another login.
+
+The main Android network policy denies cleartext; the debug resource allows only `10.0.2.2`. Dart credential flows also reject non-debug HTTP and credential redirects. Backup/device-transfer rules exclude secure credential and legacy token preference files. Native OS/device behavior has not been instrumented on a physical device.
+
+Production configuration requires explicit secrets, HTTPS API/CORS, configured TLS PostgreSQL transport, and configured TLS SMTP delivery. Argon2 costs, verification expiry and SMTP timeout require explicit inputs; synthetic test values are not production recommendations. Tests use capture delivery and disposable databases. See [`docs/phase-2-authentication.md`](docs/phase-2-authentication.md) for the full record.

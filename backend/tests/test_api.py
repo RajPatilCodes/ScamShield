@@ -1,8 +1,15 @@
+from app.email_delivery import captures
+
+
 def register(client):
-    response = client.post("/auth/register", json={"email": "user@example.com", "password": "password123"})
+    response = client.post("/v1/auth/register", json={"email": "user@example.com", "password": "password123"})
     assert response.status_code == 201
-    body = response.json()
-    assert set(body) == {"access_token", "token_type"}
+    assert "access_token" not in response.json()
+    assert client.post("/v1/auth/verification/confirm", json={"token": captures[-1].token}).status_code == 204
+    login = client.post("/v1/auth/login", json={"email": "user@example.com", "password": "password123"})
+    assert login.status_code == 200
+    body = login.json()
+    assert set(body) == {"access_token", "token_type", "refresh_token", "session_id", "expires_in"}
     assert body["token_type"] == "bearer"
     assert body["access_token"]
     return body["access_token"]
@@ -10,9 +17,9 @@ def register(client):
 
 def test_register_login_and_analysis(client):
     token = register(client)
-    login = client.post("/auth/login", json={"email": "user@example.com", "password": "password123"})
+    login = client.post("/v1/auth/login", json={"email": "user@example.com", "password": "password123"})
     assert login.status_code == 200
-    assert set(login.json()) == {"access_token", "token_type"}
+    assert set(login.json()) == {"access_token", "token_type", "refresh_token", "session_id", "expires_in"}
     assert login.json()["token_type"] == "bearer"
     response = client.post("/analysis/analyze", headers={"Authorization": f"Bearer {token}"}, json={"content": "Urgent: send a gift card and your OTP immediately: https://bad.example"})
     assert response.status_code == 200
@@ -25,9 +32,9 @@ def test_analysis_requires_auth(client):
     assert client.post("/analysis/analyze", json={"content": "hello"}).status_code == 401
 
 
-def test_duplicate_registration_rejected(client):
+def test_duplicate_registration_does_not_enumerate(client):
     register(client)
-    assert client.post("/auth/register", json={"email": "USER@example.com", "password": "password123"}).status_code == 409
+    assert client.post("/v1/auth/register", json={"email": "USER@example.com", "password": "password123"}).status_code == 201
 
 
 def test_history_is_authenticated_paginated_and_searchable(client):

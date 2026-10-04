@@ -3,6 +3,8 @@
     <application
         android:label="ScamShield"
         android:networkSecurityConfig="@xml/network_security_config"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:name="${applicationName}"
         android:icon="@mipmap/scamshield_launcher"
         android:roundIcon="@mipmap/scamshield_launcher">
