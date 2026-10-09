@@ -1,5 +1,10 @@
 class ScanResult {
-  const ScanResult({required this.score, required this.level, required this.reasons, required this.actions, required this.content, this.createdAt, this.contentType, this.sizeBytes, this.sha256});
+  const ScanResult({required this.score, required this.level, required this.reasons, required this.actions, required this.content, this.createdAt, this.contentType, this.sizeBytes, this.sha256, this.savedId, this.recordKey, this.expiresAt, this.provenance});
+  final int? savedId;
+  final String? recordKey;
+  final DateTime? expiresAt;
+  final String? provenance;
+  bool get isSaved => savedId != null;
   final String? contentType;
   final int? sizeBytes;
   final String? sha256;
@@ -18,6 +23,8 @@ class ScanResult {
     actions: List<String>.from(json['actions'] ?? const []),
     content: json['content'] as String? ?? '',
     createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
+    savedId: json['id'] as int?, recordKey: json['record_key'] as String?, provenance: json['provenance'] as String?,
+    expiresAt: json['expires_at'] is int ? DateTime.fromMillisecondsSinceEpoch((json['expires_at'] as int) * 1000, isUtc: true) : null,
   );
   factory ScanResult.fromMediaJson(Map<String, dynamic> json) {
     if (!['unverified', 'review'].contains(json['verdict']) || json['malware_scanned'] != false) {

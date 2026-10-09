@@ -4,6 +4,7 @@ import '../services/api_service.dart';
 import 'auth_screen.dart';
 import 'result_screen.dart';
 import 'scan_screen.dart';
+import 'privacy_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.api});
@@ -19,21 +20,37 @@ class _HomeScreenState extends State<HomeScreen> {
   String? error;
   String query = '';
   String filter = 'All';
+  int _historyLoad = 0;
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    widget.api.privacy.historyRevision.addListener(_invalidateHistory);
+    _load();
+  }
+  void _invalidateHistory() {
+    _historyLoad++;
+    if (mounted) setState(() { scans = []; loading = false; error = null; });
+  }
+  @override
+  void dispose() {
+    widget.api.privacy.historyRevision.removeListener(_invalidateHistory);
+    super.dispose();
+  }
   Future<void> _load() async {
+    final load = ++_historyLoad;
     setState(() { loading = true; error = null; });
     try {
       final data = await widget.api.history();
-      if (mounted) setState(() => scans = data);
-    } catch (_) { if (mounted) setState(() => error = 'Unable to load history. Please try again.'); }
-    if (mounted) setState(() => loading = false);
+      if (mounted && load == _historyLoad) setState(() => scans = data);
+    } catch (_) { if (mounted && load == _historyLoad) setState(() => error = 'Unable to load history. Please try again.'); }
+    if (mounted && load == _historyLoad) setState(() => loading = false);
   }
   Future<void> _scan() async {
     final result = await Navigator.push<ScanResult>(context, MaterialPageRoute(builder: (_) => ScanScreen(api: widget.api)));
     if (result != null && mounted) {
-      setState(() => scans = [result, ...scans]);
-      Navigator.push(context, MaterialPageRoute(builder: (_) => ResultScreen(result: result)));
+      if (result.isSaved || result.isMedia) setState(() => scans = [result, ...scans]);
+      await Navigator.push(context, MaterialPageRoute(builder: (_) => ResultScreen(result: result, api: widget.api)));
+      if (result.isSaved && mounted) await _load();
     }
   }
   Future<void> _logout() async {
@@ -90,12 +107,20 @@ class _HomeScreenState extends State<HomeScreen> {
     const SizedBox(height: 28),
     const Card(child: ListTile(leading: Icon(Icons.dark_mode_outlined), title: Text('Appearance'), subtitle: Text('Matches your device theme'))),
     const SizedBox(height: 16),
+    ListTile(leading: const Icon(Icons.privacy_tip_outlined), title: const Text('Privacy and data'),
+      onTap: () async {
+        await Navigator.push(context, MaterialPageRoute(builder: (_) => PrivacyScreen(privacy: widget.api.privacy)));
+        if (mounted && widget.api.sessions.isAuthenticated) await _load();
+      }),
     OutlinedButton.icon(onPressed: _logout, icon: const Icon(Icons.logout), label: const Text('Log out')),
   ]);
   Widget _tile(ScanResult item) {
     final color = item.isMedia ? Colors.orange : item.score >= 70 ? Colors.red : item.score >= 35 ? Colors.orange : Colors.green;
     return Card(elevation: 0, child: ListTile(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ResultScreen(result: item))),
+      onTap: () async {
+        await Navigator.push(context, MaterialPageRoute(builder: (_) => ResultScreen(result: item, api: widget.api)));
+        if (item.isSaved && mounted) await _load();
+      },
       leading: CircleAvatar(backgroundColor: color.withValues(alpha: .14), child: Icon(item.isMedia || item.score >= 35 ? Icons.warning_rounded : Icons.check_rounded, color: color)),
       title: Text(item.content, maxLines: 1, overflow: TextOverflow.ellipsis), subtitle: Text(item.isMedia ? '${item.level} • Metadata only' : item.level), trailing: item.isMedia ? const Icon(Icons.attach_file) : Text('${item.score}/100'),
     ));

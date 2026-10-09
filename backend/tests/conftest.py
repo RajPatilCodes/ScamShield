@@ -14,6 +14,9 @@ os.environ["ARGON2_MEMORY_COST"] = "8192"
 os.environ["ARGON2_PARALLELISM"] = "1"
 os.environ["VERIFICATION_EXPIRE_MINUTES"] = "30"
 os.environ["PUBLIC_API_URL"] = "http://10.0.2.2:8000"
+# Explicit approved privacy inputs, never a production/customer target.
+os.environ["PRIVACY_BATCH_SIZE"] = "100"
+os.environ["PRIVACY_EXPORT_MAX_BYTES"] = "100000000"
 
 import pytest
 import jwt
@@ -40,10 +43,16 @@ def synthetic_clock(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def reset_db():
+def reset_db(tmp_path, monkeypatch):
     validate_disposable_database(engine, Path(_TEST_DB_DIR.name))
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    from app.privacy_config import policy
+    from app.ownership import initialise_authority
+    from app.database import SessionLocal
+    monkeypatch.setattr(policy, "authority_path", str(tmp_path / "authority.db"))
+    with SessionLocal() as db:
+        initialise_authority(db)
     captures.clear()
     yield
 

@@ -2,11 +2,12 @@ import 'dart:convert';
 
 class AuthSession {
   const AuthSession({required this.accessToken, required this.refreshToken,
-    required this.sessionId, required this.expiresAt});
+    required this.sessionId, required this.expiresAt, required this.ownerId});
   final String accessToken;
   final String refreshToken;
   final String sessionId;
   final DateTime expiresAt;
+  final String ownerId;
 
   factory AuthSession.fromJson(Map<String, dynamic> json) {
     final access = json['access_token'];
@@ -26,6 +27,6 @@ class AuthSession {
     }
     final expiry = DateTime.fromMillisecondsSinceEpoch((claims['exp'] as int) * 1000, isUtc: true);
     if (!expiry.isAfter(DateTime.now())) throw const FormatException('Expired access credential');
-    return AuthSession(accessToken: access, refreshToken: refresh, sessionId: sid, expiresAt: expiry);
+    return AuthSession(accessToken: access, refreshToken: refresh, sessionId: sid, expiresAt: expiry, ownerId: claims['sub'] as String);
   }
 }

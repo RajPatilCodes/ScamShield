@@ -13,7 +13,7 @@ Known release blockers include:
 - Deployment/Compose configuration has not been converted to the new explicit authentication settings; production infrastructure was outside Phase 2.
 - PostgreSQL integration, live configured SMTP delivery, and physical-device credential-storage behavior have not been verified in this implementation environment.
 - Authentication limits cover the approved account+IP login-failure and challenge-request buckets. Broader product/service abuse controls remain future work.
-- No implemented retention/deletion workflow for saved text.
+- Production scheduling and authoritative backup/processor deletion handling need an operational rollout; local privacy workflows do not establish those external arrangements.
 - Debug signing for Android release builds; signing infrastructure was outside Phase 2.
 - Two upload contracts with different limits and validation strength.
 
@@ -56,3 +56,15 @@ Mobile access tokens stay in memory. Only API-bound refresh credentials and pend
 The main Android network policy denies cleartext; the debug resource allows only `10.0.2.2`. Dart credential flows also reject non-debug HTTP and credential redirects. Backup/device-transfer rules exclude secure credential and legacy token preference files. Native OS/device behavior has not been instrumented on a physical device.
 
 Production configuration requires explicit secrets, HTTPS API/CORS, configured TLS PostgreSQL transport, and configured TLS SMTP delivery. Argon2 costs, verification expiry and SMTP timeout require explicit inputs; synthetic test values are not production recommendations. Tests use capture delivery and disposable databases. See [`docs/phase-2-authentication.md`](docs/phase-2-authentication.md) for the full record.
+
+## Phase 3 implementation
+
+Privacy services enforce owner/lifecycle/generation predicates, current purpose-specific consent, expiry and immediate logical deletion. Wrong-owner private objects return 404. Recent-auth grants use password re-entry, five-minute expiry, single use and owner/session/lifecycle/action/target binding; access/refresh issuance is not human authentication. Existing session revocation makes grants unusable without modifying Phase 2 authentication implementations.
+
+Privacy request limits are separate: failed reauthentication 5, export creation 3, shared export download/status 10, deletion 3, receipt lookup 10, each per account+connection IP in 15 minutes. Unknown receipt lookups use a shared unbound scope at the same approved limit. Forwarded IP headers are not trusted.
+
+Account deletion restricts access and revokes sessions, then purges dependencies in bounded retryable stages. New registrations use new lifecycle identities. An independently configured fencing authority is written before local deletion commits. Private activation and maintenance enforce identity/revision/content agreement; missing/stale/unreconciled authority fails closed. Interrupted cross-store commits require reconciliation rather than reopening access. Actual independent authority preservation and external backup retention remain deployment obligations.
+
+Allowlisted audit excludes submitted content, credentials, emails, filenames, raw request bodies and credential digests. Validation errors, private responses and controlled Uvicorn access logging are redacted/no-store. Private unexpected exceptions return sanitized failure without exposing SQL parameters. External logging remains unverified.
+
+See `docs/phase-3-privacy.md` for verification and `docs/privacy-operations.md` for maintenance, failed jobs and remaining boundaries.

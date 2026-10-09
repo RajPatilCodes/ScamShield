@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../models/scan_result.dart';
+import '../services/api_service.dart';
 
 class ResultScreen extends StatelessWidget {
-  const ResultScreen({super.key, required this.result});
+  const ResultScreen({super.key, required this.result, this.api});
   final ScanResult result;
+  final ApiService? api;
   @override
   Widget build(BuildContext context) {
     final color = result.isMedia ? Colors.orange : result.score >= 70 ? Colors.red : result.score >= 35 ? Colors.orange : Colors.green;
@@ -17,6 +19,18 @@ class ResultScreen extends StatelessWidget {
         Text(result.isMedia ? 'Not malware scanned. Content remains unverified.' : 'Estimated risk • higher means more risk'),
       ]))),
       const SizedBox(height: 20),
+      Text(result.isSaved ? 'Saved privately' : 'Session-only result — not saved to text history'),
+      if (result.expiresAt != null) Text('Expires ${result.expiresAt!.toUtc()}'),
+      if (result.provenance == 'legacy_no_retroactive_consent') const Text('Legacy saved check — no retroactive consent receipt.'),
+      if (result.isSaved && api != null) OutlinedButton(onPressed: () async {
+        final accepted = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
+          title: const Text('Delete this saved check?'), content: const Text('It disappears immediately; physical purge follows.'),
+          actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete'))]));
+        if (accepted != true) return;
+        try { await api!.privacy.deleteOne(result); if (context.mounted) Navigator.pop(context); }
+        catch (_) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Deletion could not be confirmed. Please refresh.'))); }
+      }, child: const Text('Delete saved check')),
       if (result.isMedia) ...[
         const Text('Only file metadata was screened. No OCR, image interpretation, video content analysis, or malware detection was performed.'),
         const SizedBox(height: 16),

@@ -45,3 +45,21 @@ The default WSL Python 3.10.12 environment could not run pytest because the modu
 - Offline emergency guidance, accessibility, permissions, and Android/iOS lifecycle behavior.
 
 Add these tests alongside the corresponding implementation phases. Do not fabricate coverage or replace failing checks with no-op checks.
+
+## Phase 3 verification
+
+New backend tests cover consent/transient saving, two-user isolation, exact expiry, recent-auth binding/replay/revocation, private abuse buckets, JSONL exclusions, streamed rechecks, logical deletion, retry exhaustion/manual export/deletion retry, missing/stale authority activation blocking, authority-first commit interruption/reconciliation, reintroduced purged data, replacement integer IDs, unchanged terminal retention, post-lock retry deadlines, lifecycle replacement and populated migration preservation. Tests use synthetic disposable databases and separate synthetic authorities. The history regression setup now explicitly saves while its original assertions remain preserved.
+
+```text
+python -m pytest tests/test_privacy.py tests/test_privacy_lifecycle.py tests/test_privacy_jobs.py tests/test_recent_auth.py tests/test_privacy_rate_limits.py tests/test_migrations.py -q
+python -m pytest -q
+python -m pytest tests/test_privacy_postgresql.py -q
+flutter analyze
+flutter test test/privacy_test.dart test/privacy_transport_test.dart test/private_artifacts_test.dart
+flutter test
+flutter build apk --debug --dart-define=API_BASE_URL=http://10.0.2.2:8000
+```
+
+PostgreSQL tests require matching `PRIVACY_TEST_POSTGRES_URL` and `PRIVACY_TEST_POSTGRES_CONFIRM`, a loopback host, `postgresql+psycopg`, and a disposable database name beginning `phase3_test_`. Each run creates/drops its own random schema and exercises migration metadata, concurrent limits/grants, recovery/deletion ordering and global export slots. Missing service configuration produces explicit skips, not a passing PostgreSQL claim.
+
+Mobile tests cover OFF saving, protected receipts, stale-response/401 isolation, late deletion success/timeout/transport failure across account switches, original/missing saved identity, bulk history invalidation/late-read fencing, product UI, incremental exports, per-consumption 24-hour picker expiry, delayed handoff deadlines, account cleanup, picker bindings and gallery-original preservation. Native copying still needs device execution. See `../docs/phase-3-privacy.md` for results and remaining gaps.

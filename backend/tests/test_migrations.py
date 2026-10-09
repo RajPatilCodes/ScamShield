@@ -25,13 +25,13 @@ def test_fresh_migration_and_integrity(tmp_path):
     validate_disposable_database(engine, tmp_path)
     with engine.connect() as connection:
         connection.exec_driver_sql("PRAGMA foreign_keys=ON")
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0002"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0003"
         assert compare_metadata(MigrationContext.configure(connection), Base.metadata) == []
         assert "auth_sessions" in inspect(connection).get_table_names()
     with engine.begin() as connection:
-        connection.execute(text("INSERT INTO users(email, password_hash) VALUES ('synthetic@example.com','unchanged')"))
+        connection.execute(text("INSERT INTO users(email, password_hash,lifecycle_id) VALUES ('synthetic@example.com','unchanged','00000000-0000-4000-8000-000000000001')"))
     with pytest.raises(IntegrityError), engine.begin() as connection:
-        connection.execute(text("INSERT INTO users(email, password_hash) VALUES ('synthetic@example.com','duplicate')"))
+        connection.execute(text("INSERT INTO users(email,password_hash,lifecycle_id) VALUES ('synthetic@example.com','duplicate','00000000-0000-4000-8000-000000000002')"))
     with pytest.raises(IntegrityError), engine.begin() as connection:
         connection.execute(text("INSERT INTO auth_sessions(id,user_id,created_at,idle_expires_at,absolute_expires_at) VALUES ('synthetic',1,1,3,2)"))
     with pytest.raises(IntegrityError), engine.begin() as connection:
@@ -60,7 +60,8 @@ def test_validated_existing_adoption_preserves_records(tmp_path):
     command.upgrade(config, "head")
     with engine.connect() as connection:
         assert connection.execute(text("SELECT id,email,password_hash,created_at FROM users")).all() == before_users
-        assert connection.execute(text("SELECT * FROM analyses")).all() == before_analyses
+        assert connection.execute(text("SELECT id,user_id,content,score,verdict,created_at FROM analyses")).all() == before_analyses
+        assert connection.scalar(text("SELECT provenance FROM analyses")) == "legacy_no_retroactive_consent"
         assert connection.execute(text("SELECT email_verified,is_active FROM users")).one() == (0, 1)
     engine.dispose()
 
@@ -121,3 +122,40 @@ def test_target_confirmation_and_protected_database(tmp_path):
     with pytest.raises(ValueError, match="protected"):
         command.upgrade(config, "head")
     assert not (tmp_path / "scamshield.db").exists()
+
+
+def test_phase2_populated_upgrade_preserves_credentials(tmp_path):
+    config = migration_config(tmp_path)
+    command.upgrade(config, "0002")
+    engine = create_engine(config.attributes["database_url"])
+    with engine.begin() as db:
+        db.execute(text("INSERT INTO users(id,email,password_hash,email_verified) VALUES (7,'synthetic@example.com','unchanged',1)"))
+        db.execute(text("INSERT INTO auth_sessions(id,user_id,created_at,idle_expires_at,absolute_expires_at) VALUES ('session',7,1,2,3)"))
+        db.execute(text("INSERT INTO refresh_credentials(digest,session_id,expires_at) VALUES ('digest','session',2)"))
+        db.execute(text("INSERT INTO auth_challenges(digest,user_id,purpose,expires_at) VALUES ('challenge',7,'recovery',2)"))
+        before = {table: db.execute(text(f"SELECT * FROM {table}")).all() for table in ("auth_sessions", "refresh_credentials", "auth_challenges")}
+    command.upgrade(config, "head")
+    with engine.connect() as db:
+        for table, original in before.items():
+            assert db.execute(text(f"SELECT * FROM {table}")).all() == original
+        assert list(db.execute(text("PRAGMA foreign_key_check"))) == []
+    engine.dispose()
+
+
+@pytest.mark.parametrize("fault", ["orphan", "timestamp"])
+def test_privacy_preflight_fails_without_altering_legacy_data(tmp_path, fault):
+    config = migration_config(tmp_path)
+    command.upgrade(config, "0002")
+    engine = create_engine(config.attributes["database_url"])
+    with engine.begin() as db:
+        db.execute(text("INSERT INTO users(id,email,password_hash) VALUES (7,'synthetic@example.com','unchanged')"))
+        db.execute(text("INSERT INTO analyses(user_id,content,score,verdict,created_at) VALUES (:owner,'synthetic',0,'low-risk',:time)"),
+                   {"owner": 999 if fault == "orphan" else 7, "time": "not-a-timestamp" if fault == "timestamp" else "2026-01-01 00:00:00"})
+        before = db.execute(text("SELECT * FROM analyses")).all()
+    with pytest.raises(ValueError, match="resolution"):
+        command.upgrade(config, "head")
+    with engine.connect() as db:
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "0002"
+        assert db.execute(text("SELECT * FROM analyses")).all() == before
+        assert "lifecycle_id" not in {col["name"] for col in inspect(db).get_columns("users")}
+    engine.dispose()

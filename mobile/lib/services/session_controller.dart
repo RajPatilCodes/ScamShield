@@ -26,6 +26,7 @@ class SessionController extends ChangeNotifier {
   Future<void>? _loggingIn;
   Future<void> _storageQueue = Future.value();
   int _generation = 0;
+  int get generation => _generation;
   bool get isAuthenticated => _session != null;
   AuthSession? get session => _session;
 

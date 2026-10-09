@@ -5,16 +5,23 @@ import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mime/mime.dart';
 import '../models/scan_result.dart';
+import '../models/privacy.dart';
 import 'session_controller.dart';
 import 'session_store.dart';
+import 'privacy_service.dart';
+import 'privacy_store.dart';
+import 'private_artifacts.dart';
 
 class ApiService {
-  ApiService({http.Client? client, SessionStore? sessionStore, String apiUrl = baseUrl}) : _client = client ?? http.Client(), _baseUrl = apiUrl {
+  ApiService({http.Client? client, SessionStore? sessionStore, PrivacyStore? privacyStore, PrivateArtifacts? privateArtifacts, String apiUrl = baseUrl}) : _client = client ?? http.Client(), _baseUrl = apiUrl {
     sessions = SessionController(client: _client, store: sessionStore ?? SessionStore(), apiUrl: apiUrl);
+    privacy = PrivacyService(client: _client, sessions: sessions, apiUrl: apiUrl, authenticated: _authenticated,
+      store: privacyStore, artifacts: privateArtifacts);
   }
   final http.Client _client;
   final String _baseUrl;
   late final SessionController sessions;
+  late final PrivacyService privacy;
   static const baseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://10.0.2.2:8000');
 
   Future<bool> isSignedIn() async {
@@ -33,16 +40,29 @@ class ApiService {
     return {'Authorization': 'Bearer ${await sessions.accessToken()}'};
   }
   Future<http.Response> _authenticated(Future<http.Response> Function(Map<String, String>) send) async {
-    final original = await _headers();
+    final generation = sessions.generation;
     final sessionId = sessions.session?.sessionId;
+    void ensureCurrent() {
+      if (!sessions.isAuthenticated || sessions.generation != generation || sessions.session?.sessionId != sessionId) {
+        throw const MediaScanException('Please sign in again.');
+      }
+    }
+    await privacy.artifacts.ready;
+    ensureCurrent();
+    final original = await _headers();
+    ensureCurrent();
     var response = await send(original);
-    if (!sessions.isAuthenticated || sessions.session?.sessionId != sessionId) throw const MediaScanException('Please sign in again.');
+    ensureCurrent();
     if (response.statusCode == 401) {
       if (original['Authorization'] == 'Bearer ${sessions.session?.accessToken}') await sessions.refresh();
-      response = await send(await _headers());
+      ensureCurrent();
+      final refreshed = await _headers();
+      ensureCurrent();
+      response = await send(refreshed);
+      ensureCurrent();
       if (response.statusCode == 401) await sessions.invalidate();
     }
-    if (response.statusCode != 401 && sessions.session?.sessionId != sessionId) throw const MediaScanException('Please sign in again.');
+    if (response.statusCode != 401 && (sessions.generation != generation || sessions.session?.sessionId != sessionId)) throw const MediaScanException('Please sign in again.');
     return response;
   }
   void _check(http.Response response) {
@@ -69,6 +89,8 @@ class ApiService {
       throw const MediaScanException('The service returned an unexpected response.');
     } on SessionException catch (error) {
       throw MediaScanException(error.message);
+    } on PrivacyException catch (error) {
+      throw MediaScanException(error.message);
     }
   }
   Future<bool> authenticate(String email, String password, {bool register = false}) => _request(() async {
@@ -93,7 +115,8 @@ class ApiService {
     await sessions.post('recovery/confirm', {'token': token.trim(), 'password': password});
     await sessions.invalidate();
   });
-  Future<ScanResult> scan(String content) => _request(() async {
+  Future<ScanResult> scan(String content, {bool save = false}) => _request(() async {
+    if (save) return privacy.saveScan(content);
     final response = await _authenticated((headers) => _client.post(Uri.parse('$_baseUrl/analysis/analyze'), headers: {...headers, 'Content-Type': 'application/json'}, body: jsonEncode({'content': content})));
     _check(response);
     final body = jsonDecode(response.body) as Map<String, dynamic>;
@@ -104,14 +127,22 @@ class ApiService {
     _check(response);
     return ((jsonDecode(response.body) as Map<String, dynamic>)['items'] as List).map((e) => ScanResult.fromJson(e as Map<String, dynamic>)).toList();
   });
-  Future<ScanResult> scanMedia(XFile file) => _request(() async {
+  Future<ScanResult> scanMedia(XFile file, {String? filename}) => _request(() async {
+    final captured = privacy.context;
+    final generation = sessions.generation;
+    final sessionId = sessions.session?.sessionId;
+    final displayName = filename ?? file.name;
+    await privacy.artifacts.checkUse(captured, file.path);
     final length = await file.length();
     if (length > 20 * 1024 * 1024) throw const MediaScanException('Choose a file no larger than 20 MiB.');
     if (length == 0) throw const MediaScanException('This file is empty. Choose another file.');
+    if (sessions.generation != generation || sessions.session?.sessionId != sessionId) throw const MediaScanException('Please sign in again.');
     final response = await _authenticated((headers) async {
+      await privacy.artifacts.checkUse(captured, file.path);
       final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/analysis/media'));
       request.headers.addAll(headers);
-      request.files.add(http.MultipartFile('file', file.openRead(), length, filename: file.name, contentType: MediaType.parse(lookupMimeType(file.name) ?? 'application/octet-stream')));
+      request.files.add(http.MultipartFile('file', privacy.artifacts.checkedRead(captured, file.path, file.openRead()), length,
+        filename: displayName, contentType: MediaType.parse(lookupMimeType(displayName) ?? 'application/octet-stream')));
       return http.Response.fromStream(await _client.send(request));
     });
     _check(response);

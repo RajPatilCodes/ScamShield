@@ -40,14 +40,20 @@ def test_duplicate_registration_does_not_enumerate(client):
 def test_history_is_authenticated_paginated_and_searchable(client):
     token = register(client)
     headers = {"Authorization": f"Bearer {token}"}
-    client.post("/analysis/analyze", headers=headers, json={"content": "first message"})
-    client.post("/analysis/analyze", headers=headers, json={"content": "second urgent message"})
+    from tests.privacy_helpers import consent, save
+    tokens = {"access_token": token}
+    assert consent(client, tokens).status_code == 200
+    assert save(client, tokens, "first message").status_code == 201
+    assert save(client, tokens, "second urgent message").status_code == 201
 
     response = client.get("/analysis/history?page=1&page_size=1&search=urgent", headers=headers)
     assert response.status_code == 200
     assert set(response.json()) == {"items", "page", "page_size", "total"}
     assert response.json()["total"] == 1
     assert response.json()["items"][0]["content"] == "second urgent message"
+    item = response.json()["items"][0]
+    assert len(item["record_key"]) == 36 and item["expires_at"] > 0
+    assert item["provenance"] == "current_consent"
     assert client.get("/analysis/history").status_code == 401
 
 

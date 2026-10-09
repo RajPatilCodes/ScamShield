@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -19,8 +20,32 @@ class _ScanScreenState extends State<ScanScreen> {
   bool loading = false;
   bool picking = false;
   XFile? media;
+  String? mediaName;
   bool video = false;
   String? error;
+  bool save = false;
+  Timer? _mediaExpiry;
+
+  Future<void> _selectCopy(File copy, String name, bool isVideo) async {
+    final captured = widget.api.privacy.context;
+    final expiry = await widget.api.privacy.artifacts.checkUse(captured, copy.path, requireManaged: true);
+    if (!mounted) return;
+    _mediaExpiry?.cancel();
+    setState(() { media = XFile(copy.path, name: name); mediaName = name; video = isVideo; });
+    _mediaExpiry = Timer(DateTime.fromMillisecondsSinceEpoch(expiry!).difference(DateTime.now()), () {
+      if (!mounted) return;
+      _removeMedia(expired: true);
+    });
+  }
+  void _removeMedia({bool expired = false}) {
+    _mediaExpiry?.cancel();
+    final selected = media;
+    if (selected != null) {
+      FileImage(File(selected.path)).evict();
+      widget.api.privacy.artifacts.discardPickerCopy(selected.path).catchError((_) {});
+    }
+    setState(() { media = null; mediaName = null; error = expired ? 'Selected media expired. Please select it again.' : null; });
+  }
 
   @override
   void initState() {
@@ -30,23 +55,38 @@ class _ScanScreenState extends State<ScanScreen> {
 
   Future<void> _recoverMedia() async {
     try {
+      final captured = widget.api.privacy.context;
+      final pickerExpiresAt = await widget.api.privacy.store.recoverPicker(captured, DateTime.now());
       final lost = await picker.retrieveLostData();
       if (!mounted || lost.isEmpty) return;
+      widget.api.privacy.check(captured);
+      if (pickerExpiresAt == null) {
+        for (final file in lost.files ?? <XFile>[]) { await widget.api.privacy.artifacts.discardPickerCopy(file.path); }
+        if (mounted) setState(() => error = 'Please select media again for this account.');
+        return;
+      }
       if (lost.exception != null) {
         setState(() => error = 'The selected media could not be recovered. Please select it again.');
       } else if (lost.files?.isNotEmpty == true) {
-        setState(() {
-          media = lost.files!.first;
-          video = lost.type == RetrieveType.video;
-        });
+        final original = lost.files!.first;
+        final copy = await widget.api.privacy.artifacts.adoptPickerCopy(captured, original.path, expiresAt: pickerExpiresAt);
+        widget.api.privacy.check(captured);
+        if (!mounted) return;
+        await _selectCopy(copy, original.name, lost.type == RetrieveType.video);
       }
-    } on PlatformException {
+    } catch (_) {
       if (mounted) setState(() => error = 'Please select your media again.');
     }
   }
 
   @override
   void dispose() {
+    _mediaExpiry?.cancel();
+    final selected = media;
+    if (selected != null) {
+      FileImage(File(selected.path)).evict();
+      widget.api.privacy.artifacts.discardPickerCopy(selected.path).catchError((_) {});
+    }
     controller.dispose();
     super.dispose();
   }
@@ -54,14 +94,26 @@ class _ScanScreenState extends State<ScanScreen> {
   Future<void> _pick(ImageSource source, {bool isVideo = false}) async {
     setState(() { picking = true; error = null; });
     try {
+      final captured = widget.api.privacy.context;
+      final pickerExpiresAt = await widget.api.privacy.store.beginPicker(captured, DateTime.now(), artifactHours: widget.api.privacy.artifactHours);
       final selected = isVideo
           ? await picker.pickVideo(source: source)
           : await picker.pickImage(source: source);
       if (selected != null && mounted) {
-        if (await selected.length() > 20 * 1024 * 1024) {
+        widget.api.privacy.check(captured);
+        if (DateTime.now().millisecondsSinceEpoch >= pickerExpiresAt) {
+          await widget.api.privacy.store.clearPicker();
+          await widget.api.privacy.artifacts.discardPickerCopy(selected.path);
+          if (mounted) setState(() => error = 'Selected media expired. Please select it again.');
+        } else if (await selected.length() > 20 * 1024 * 1024) {
           if (mounted) setState(() => error = 'Choose a file no larger than 20 MiB.');
         } else if (mounted) {
-          setState(() { media = selected; video = isVideo; });
+          final copy = await widget.api.privacy.artifacts.adoptPickerCopy(captured, selected.path, expiresAt: pickerExpiresAt);
+          widget.api.privacy.check(captured);
+          if (mounted) {
+            await _selectCopy(copy, selected.name, isVideo);
+            await widget.api.privacy.store.clearPicker();
+          }
         }
       }
     } on PlatformException catch (e) {
@@ -85,8 +137,8 @@ class _ScanScreenState extends State<ScanScreen> {
     setState(() { loading = true; error = null; });
     try {
       final result = media == null
-          ? await widget.api.scan(controller.text.trim())
-          : await widget.api.scanMedia(media!);
+          ? await widget.api.scan(controller.text.trim(), save: save)
+          : await widget.api.scanMedia(media!, filename: mediaName);
       if (mounted) Navigator.pop<ScanResult>(context, result);
     } catch (e) {
       if (mounted) {
@@ -96,6 +148,25 @@ class _ScanScreenState extends State<ScanScreen> {
         });
       }
     }
+  }
+
+  Future<void> savingChoice(bool value) async {
+    if (!value) { setState(() => save = false); return; }
+    setState(() => loading = true);
+    try {
+      final settings = await widget.api.privacy.settings();
+      if (!mounted) return;
+      if (!settings.savingEnabled) {
+        final accepted = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
+          title: const Text('Product saving choice'), content: Text(settings.notice), actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Keep transient')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Allow saving'))]));
+        if (accepted != true) return;
+        await widget.api.privacy.consent(settings, true);
+      }
+      if (mounted) setState(() => save = true);
+    } catch (_) { if (mounted) setState(() => error = 'Current saving consent could not be confirmed.'); }
+    finally { if (mounted) setState(() => loading = false); }
   }
 
   @override
@@ -118,8 +189,10 @@ class _ScanScreenState extends State<ScanScreen> {
         const SizedBox(height: 16),
         if (media != null) Card(child: Column(children: [
           if (!video) ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.file(File(media!.path), height: 180, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Padding(padding: EdgeInsets.all(24), child: Icon(Icons.image_not_supported_outlined, size: 48)))),
-          ListTile(leading: Icon(video ? Icons.movie_outlined : Icons.image_outlined), title: Text(media!.name, maxLines: 2, overflow: TextOverflow.ellipsis), subtitle: Text(video ? 'Video ready to scan' : 'Image ready to scan'), trailing: IconButton(tooltip: 'Remove media', onPressed: busy ? null : () => setState(() { media = null; error = null; }), icon: const Icon(Icons.close))),
+          ListTile(leading: Icon(video ? Icons.movie_outlined : Icons.image_outlined), title: Text(mediaName ?? media!.name, maxLines: 2, overflow: TextOverflow.ellipsis), subtitle: Text(video ? 'Video ready to scan' : 'Image ready to scan'), trailing: IconButton(tooltip: 'Remove media', onPressed: busy ? null : _removeMedia, icon: const Icon(Icons.close))),
         ])) else TextField(controller: controller, enabled: !busy, maxLines: 8, decoration: const InputDecoration(hintText: 'Paste a text message, email, or URL here...', alignLabelWithHint: true)),
+        if (media == null) SwitchListTile(value: save, onChanged: busy ? null : savingChoice,
+          title: const Text('Save this text check'), subtitle: const Text('Off by default. Requires current consent; expiry is shown on the saved result.')),
         if (error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Semantics(liveRegion: true, child: Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error)))),
         const SizedBox(height: 18),
         FilledButton.icon(onPressed: busy ? null : submit, icon: busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.search_rounded), label: Padding(padding: const EdgeInsets.symmetric(vertical: 15), child: Text(loading ? 'Analyzing...' : picking ? 'Opening media...' : 'Analyze now'))),

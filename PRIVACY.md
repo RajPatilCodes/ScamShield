@@ -5,12 +5,13 @@
 ## Current source behavior
 
 - Registration accepts an email address and password. The backend stores an email address and password hash; the password is submitted to the configured authentication endpoint.
-- The mobile client stores its bearer token in SharedPreferences, not OS-protected credential storage.
-- Successful text/URL analysis stores the submitted text with a user identifier, score, verdict, and timestamp. Text-history queries are scoped to the authenticated user.
+- Mobile access tokens stay in memory. API-bound refresh credentials use OS-protected storage. Separate protected privacy keys hold deletion-status receipts and pending-picker ownership markers; passwords and recent-auth grants are not persisted.
+- Text/URL analysis is transient by default. Explicit saving requires current purpose-specific product consent; saved text, score, verdict and timestamps expire after 90 days. Owner/deletion/expiry predicates cover history, counts, detail and export. Original explanation persistence remains later assessment work.
 - Media is sent to the configured backend after the user submits it. The current routes return metadata and a hash; they do not implement durable business-record storage of media or media history.
 - The older upload path uses framework-managed uploaded files, which may involve temporary storage. Proxy/server buffering and deployed infrastructure have not been inspected. Do not claim uploaded bytes can never touch disk.
 - Current media results remain in the mobile screen session and disappear on history refresh/restart.
-- Account deletion, export, configurable retention, explicit saved-analysis consent, and a production consent-management workflow are not implemented.
+- Phase 3 implements product consent, private JSONL export, immediate logical deletion and retryable physical purge. Account deletion immediately restricts access and revokes sessions; failure does not undo that restriction. Legacy analyses are explicitly marked as having no retroactive consent.
+- Export staging and app-managed private export/cache artifacts expire after 24 hours. Explicitly user-saved export copies are outside later app cleanup. Consent receipts are retained 730 fixed days, redacted audit 365 fixed days, and completed/failed job status 30 days. Unresolved deletion/restoration markers are not age-pruned.
 
 No deployment, processor inventory, production logging policy, infrastructure encryption configuration, data residency, or backup policy has been verified. This document does not make promises about those unverified systems.
 
@@ -35,8 +36,10 @@ These are requirements, not implemented guarantees.
 
 ## Decisions still required
 
-The owner must approve launch jurisdictions, user-age policy, actual service operators/processors, staff access, data residency, consent purposes, retention periods, lawful exceptions, backup handling, and any third-party analysis integration.
+Approved implementation inputs are recorded in `docs/phase-3-privacy.md`. Jurisdiction-specific legal requirements, legal consent wording, actual backup retention, external processor obligations and external infrastructure logging guarantees remain unresolved. No lawful deletion exception is invented.
 
-No retention duration, legal basis, support address, privacy contact, or compliance status is invented here. A suitable production privacy policy and store declarations must be prepared and reviewed against the implemented service before launch.
+The listed durations are owner-approved implementation inputs, not a legal basis or compliance claim. No support address or privacy contact is invented. Product consent copy is clearly labelled as product wording. A production privacy notice/store disclosure must reflect reviewed service and processor behavior.
+
+An older backup is programmatically blocked from private activation/maintenance until its checkpoint and markers agree with the independently configured authority. Missing/stale authority fails closed. Reconciled markers fence restored accounts, old analysis generations and stale work. Retention and independent preservation of authoritative backup/processor records and actual restore orchestration are operational boundaries, not guarantees established by local tests.
 
 See `docs/current-state.md`, `docs/implementation-blueprint.md`, and `SECURITY.md`.

@@ -4,22 +4,22 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Analysis, User
-from ..schemas import AnalysisHistoryResponse, AnalysisRequest, AnalysisResponse
+from ..schemas import AnalysisResponse
 from ..scoring import analyze
 from ..security import current_user
+from ..ownership import visible_analysis
+from ..privacy_schemas import TransientRequest, SavedHistoryResponse
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
 
 
 @router.post("/analyze", response_model=AnalysisResponse)
-def analyze_content(request: AnalysisRequest, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def analyze_content(request: TransientRequest, user: User = Depends(current_user), db: Session = Depends(get_db)):
     score, verdict, flags = analyze(request.content)
-    db.add(Analysis(user_id=user.id, content=request.content, score=score, verdict=verdict))
-    db.commit()
     return AnalysisResponse(score=score, verdict=verdict, flags=flags)
 
 
-@router.get("/history", response_model=AnalysisHistoryResponse)
+@router.get("/history", response_model=SavedHistoryResponse)
 def analysis_history(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -27,7 +27,7 @@ def analysis_history(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    filters = [Analysis.user_id == user.id]
+    filters = list(visible_analysis(user))
     if search and search.strip():
         filters.append(Analysis.content.ilike(f"%{search.strip()}%"))
     total = db.scalar(select(func.count()).select_from(Analysis).where(*filters)) or 0
@@ -35,4 +35,4 @@ def analysis_history(
         select(Analysis).where(*filters).order_by(Analysis.created_at.desc(), Analysis.id.desc())
         .offset((page - 1) * page_size).limit(page_size)
     ).all()
-    return AnalysisHistoryResponse(items=rows, page=page, page_size=page_size, total=total)
+    return SavedHistoryResponse(items=rows, page=page, page_size=page_size, total=total)

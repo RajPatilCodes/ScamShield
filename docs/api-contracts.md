@@ -2,9 +2,9 @@
 
 ## Contract status
 
-Phase 2 versions authentication/session operations only. The analysis, history, media, upload and health paths and product contracts below remain the Phase 1 contracts. This is not a production SLA or a claim that other planned `/v1` modules exist.
+Phase 2 authentication/session contracts remain preserved. Phase 3 adds `/v1/privacy`, removes automatic text persistence and excludes logically deleted/expired data from history. Scoring, media, upload and health behavior remain preserved. This is not a production SLA or a claim that later planned modules exist.
 
-Authentication uses `/v1/auth`; legacy `/auth/register` and `/auth/login` are no longer available. Other current routes remain unversioned.
+Authentication uses `/v1/auth`; privacy uses `/v1/privacy`. Legacy `/auth/register` and `/auth/login` are unavailable. Existing analysis/media/history routes remain unversioned.
 
 Common current error responses are FastAPI responses of the form:
 
@@ -13,6 +13,8 @@ Common current error responses are FastAPI responses of the form:
 ```
 
 Clients must not rely on the wording of error details for authorization or security decisions.
+
+Phase 3's restoration activation gate requires the explicitly configured independent authority to match the local checkpoint and marker contents. Missing/stale/unreconciled authority returns sanitized `503` on authentication/private routes before activation. This gate adds no authentication claims, password rules, session lifetime or abuse-limit changes. `/health` remains static liveness.
 
 ## Current backend contract
 
@@ -133,7 +135,7 @@ The score is a deterministic heuristic warning score, not a calibrated probabili
 - `suspicious`: score 30–59;
 - `high-risk`: score 60 or higher.
 
-A successful text analysis is currently saved automatically. Explicit save consent, model/version metadata, and persisted explanation signals are not implemented in this phase.
+A successful call is transient and does not save content. Explicit saving uses `POST /v1/privacy/analyses` with `save:true`, valid current product consent and an `Idempotency-Key`. Scoring is unchanged; assessment model/version metadata and persisted explanation signals remain later-phase work.
 
 ### `GET /analysis/history`
 
@@ -158,7 +160,10 @@ Response:
       "score": 20,
       "verdict": "low-risk",
       "flags": [],
-      "created_at": "2026-01-01T00:00:00"
+      "created_at": "2026-01-01T00:00:00",
+      "record_key": "00000000-0000-4000-8000-000000000001",
+      "expires_at": 1775001600,
+      "provenance": "current_consent"
     }
   ],
   "page": 1,
@@ -167,7 +172,7 @@ Response:
 }
 ```
 
-The current query applies an authenticated-user predicate. Media results are not included, and the stored analysis record does not retain the original flags.
+The query applies authenticated owner/lifecycle/generation and logical-deletion/expiry predicates to both items and total. Media results are not included; original flags are not persisted. History includes the stable `record_key`, expiry and provenance with the original saved item. Deletion must send that original key; never resolve a stale integer ID and substitute the current occupant's identity. Missing identity requires refreshing history and selecting the current record explicitly.
 
 ### `POST /analysis/media`
 
@@ -271,3 +276,29 @@ The current Flutter client uses `ApiService` with these rules:
 Access tokens remain in memory. API-bound refresh credentials use OS-protected storage, and the legacy SharedPreferences bearer key is removed. Session restoration rotates the stored credential. Refresh is coordinated, `401` handling is centralized, and invalidation removes all private navigation/screen state. Logout requires server revocation; an offline pending revocation is shown honestly and cannot restore a session.
 
 Future Flutter `/v1` integration must use typed DTOs, server timestamps and assessment versions, server-authoritative ownership/status, explicit unknown/error states, and reauthorization before opening private destinations.
+
+## Phase 3 privacy contract
+
+All private responses/errors are no-store. Privacy writes reject unknown fields; owner, lifecycle, expiry, deletion and authorization state are server-controlled. Unknown/wrong-owner IDs return 404. Privacy mutations below require a bounded `Idempotency-Key`; conflicting reuse returns 409. Consent changes require the expected preference version.
+
+| Method/path under `/v1/privacy` | Request / authorization | Success |
+| --- | --- | --- |
+| `GET /` (without trailing slash) | Access bearer | Settings, current product notice/hash/version, retention/resource inputs |
+| `PUT /consents/saved_analysis_storage` | `granted`, current `version`, `expected_version`; idempotency | 200, saving/preference state |
+| `POST /analyses` | `content`, `save:true`; current consent; idempotency | 201, legacy score fields plus saved identity/content/expiry/provenance |
+| `GET /analyses/{id}` | Access owner | 200, current visible saved record |
+| `DELETE /analyses/{id}` | Matching server `record_key`; idempotency | 202, logically deleted immediately; purge job |
+| `POST /reauthenticate` | `password`, `action`, `target` | 200, memory-only grant and expiry |
+| `POST /exports` | `grant` for `export_create`/`self`; idempotency | 202, job |
+| `GET /exports` | Optional opaque `cursor`; shared export-read rate limit | Bounded items and next cursor |
+| `GET /exports/{id}` | Access owner; shared read limit | 200, status |
+| `GET /exports/{id}/content` | Owner plus `X-Recent-Auth` for `export_download`/job ID | Streamed UTF-8 JSONL, exact Content-Length |
+| `POST /deletions` | `scope:saved` or `account`, matching grant, idempotency; account requires protected random `receipt` | 202, immediate restriction/logical removal and purge job |
+| `GET /deletions/{id}` | Active owner | 200, status |
+| `POST /deletions/status` | Protected `receipt` in JSON body, no ordinary session required | Sanitized status only; unknown/expired 404 |
+
+Reauthentication actions are `export_create`, `export_download`, `delete_saved`, `delete_account`. Targets are `self` except download, which targets the owned export job. Grants last 300 seconds and are single-use/session/lifecycle bound. Separate grants are required for export creation/download. Individual deletion and ordinary consent withdrawal need no grant.
+
+Jobs expose `queued`, `retrying`, `ready` (export), `completed`, `failed`, `cancelled`, or `expired`, with sanitized error codes. Failed deletion never reopens an account. Download source/state/expiry/session is rechecked between bounded chunks; interrupted content is not a complete export. JSONL starts with format-version-1 manifest and ends with an explicit completion record. It includes owner account information, stored analyses, consent receipts, permitted session timestamps and allowlisted audit metadata; no credential/hash/digest fields or other-user data.
+
+See `phase-3-privacy.md` for exact limits and `privacy-operations.md` for polling, retries and restoration boundaries.
