@@ -302,3 +302,17 @@ Reauthentication actions are `export_create`, `export_download`, `delete_saved`,
 Jobs expose `queued`, `retrying`, `ready` (export), `completed`, `failed`, `cancelled`, or `expired`, with sanitized error codes. Failed deletion never reopens an account. Download source/state/expiry/session is rechecked between bounded chunks; interrupted content is not a complete export. JSONL starts with format-version-1 manifest and ends with an explicit completion record. It includes owner account information, stored analyses, consent receipts, permitted session timestamps and allowlisted audit metadata; no credential/hash/digest fields or other-user data.
 
 See `phase-3-privacy.md` for exact limits and `privacy-operations.md` for polling, retries and restoration boundaries.
+
+## Phase 4 public catalog contract
+
+Phase 4 adds public, read-only catalog routes under `/v1`: `/catalog/categories`, `/catalog/guides`, `/catalog/guides/{guide_id}`, `/catalog/search`, `/emergency/playbooks`, `/emergency/playbooks/{playbook_id}`, `/learning/lessons`, `/learning/lessons/{lesson_id}`, `/checklists`, `/checklists/{checklist_id}`, `/resources`, and `/resources/{resource_id}`. These routes do not require authentication and return no account, assessment, report, evidence, or progress data.
+
+List/search requests accept bounded `limit` and opaque `cursor` values. Catalog requests accept `jurisdiction=IN` and `language=en|hi`; guide lists/search also accept a bounded `category_id`. Unknown or malformed identifiers, locales, jurisdictions, cursors, filters, and page sizes are rejected. Responses are strict typed schemas and report requested/content language plus visible fallback status.
+
+Every public catalog response includes `X-Catalog-Revision`, `X-Catalog-Status`, `X-Catalog-Digest`, an ETag derived from the immutable revision/digest, and public caching metadata. The current revision is a draft: guides remain `pending_editorial_review`, and resources remain `unverified`. A resource may return `content_digest: null` while its definition is pending; a non-null value is the SHA-256 of the canonical resource-definition fields (`id`, `language`, `name`, `jurisdiction`, `destination`, `publisher`, and `source_references`) serialized as UTF-8 JSON with sorted keys and compact separators. A published revision requires editorial evidence for all educational items and no unverified resource. The backend importer validates the complete manifest and commits one immutable revision; there is no public content mutation route.
+
+Catalog response bodies and revision metadata are selected from the same publication snapshot. Category cursors encode the displayed `(sort_order, category_id)` order rather than only the category identifier, so bounded pagination does not skip or repeat categories.
+
+Guest checklist progress is local-only and has no API contract. Learning knowledge checks are public content and are evaluated locally; answers and progress are not synchronized.
+
+See `phase-4-catalog.md` for content import, draft/publication gates, offline emergency fallback, cache rollback, integrity metadata, and remaining verification boundaries.

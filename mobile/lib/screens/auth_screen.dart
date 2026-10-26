@@ -4,14 +4,20 @@ import 'verify_email_screen.dart';
 import 'password_recovery_screen.dart';
 
 class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key, required this.api});
+  const AuthScreen({super.key, required this.api, this.initialRegister = false});
   final ApiService api;
+  final bool initialRegister;
   @override State<AuthScreen> createState() => _AuthScreenState();
 }
 class _AuthScreenState extends State<AuthScreen> {
   final email = TextEditingController(); final password = TextEditingController();
   bool register = false, loading = false;
   String? error;
+  @override
+  void initState() {
+    super.initState();
+    register = widget.initialRegister;
+  }
   @override
   void dispose() { email.dispose(); password.dispose(); super.dispose(); }
   Future<void> submit() async {

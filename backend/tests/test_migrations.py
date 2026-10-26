@@ -9,6 +9,7 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import IntegrityError
 
 from app.database import Base, validate_disposable_database
+from app.catalog_models import CatalogBase
 
 
 def migration_config(tmp_path, adoption=False):
@@ -25,8 +26,8 @@ def test_fresh_migration_and_integrity(tmp_path):
     validate_disposable_database(engine, tmp_path)
     with engine.connect() as connection:
         connection.exec_driver_sql("PRAGMA foreign_keys=ON")
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0003"
-        assert compare_metadata(MigrationContext.configure(connection), Base.metadata) == []
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0005"
+        assert compare_metadata(MigrationContext.configure(connection), [Base.metadata, CatalogBase.metadata]) == []
         assert "auth_sessions" in inspect(connection).get_table_names()
     with engine.begin() as connection:
         connection.execute(text("INSERT INTO users(email, password_hash,lifecycle_id) VALUES ('synthetic@example.com','unchanged','00000000-0000-4000-8000-000000000001')"))

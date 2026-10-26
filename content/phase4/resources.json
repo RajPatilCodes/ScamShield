@@ -1,0 +1,4 @@
+[
+  {"id":"resource-official-reporting-pending","language":"en","name":"Official reporting destination (pending verification)","jurisdiction":"IN","destination":null,"publisher":"To be independently confirmed","source_references":[],"verification_status":"unverified","verification_date":null,"next_review_at":null,"content_digest":null,"withdrawn":false},
+  {"id":"resource-provider-support-pending","language":"en","name":"Provider support destination (pending verification)","jurisdiction":"IN","destination":null,"publisher":"To be independently confirmed","source_references":[],"verification_status":"unverified","verification_date":null,"next_review_at":null,"content_digest":null,"withdrawn":false}
+]

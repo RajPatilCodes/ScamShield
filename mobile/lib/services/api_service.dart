@@ -11,17 +11,23 @@ import 'session_store.dart';
 import 'privacy_service.dart';
 import 'privacy_store.dart';
 import 'private_artifacts.dart';
+import 'catalog_service.dart';
+import 'catalog_cache.dart';
+import 'guest_progress_store.dart';
 
 class ApiService {
-  ApiService({http.Client? client, SessionStore? sessionStore, PrivacyStore? privacyStore, PrivateArtifacts? privateArtifacts, String apiUrl = baseUrl}) : _client = client ?? http.Client(), _baseUrl = apiUrl {
+  ApiService({http.Client? client, SessionStore? sessionStore, PrivacyStore? privacyStore, PrivateArtifacts? privateArtifacts,
+    CatalogCacheStore? catalogCache, GuestProgressStore? guestProgress, String apiUrl = baseUrl}) : _client = client ?? http.Client(), _baseUrl = apiUrl {
     sessions = SessionController(client: _client, store: sessionStore ?? SessionStore(), apiUrl: apiUrl);
     privacy = PrivacyService(client: _client, sessions: sessions, apiUrl: apiUrl, authenticated: _authenticated,
       store: privacyStore, artifacts: privateArtifacts);
+    catalog = CatalogService(client: _client, sessions: sessions, apiUrl: apiUrl, cache: catalogCache, progress: guestProgress);
   }
   final http.Client _client;
   final String _baseUrl;
   late final SessionController sessions;
   late final PrivacyService privacy;
+  late final CatalogService catalog;
   static const baseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://10.0.2.2:8000');
 
   Future<bool> isSignedIn() async {

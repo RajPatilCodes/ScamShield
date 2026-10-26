@@ -1,0 +1,55 @@
+[
+  {
+    "id": "urgent-payment-or-account",
+    "title": "Urgent payment or account warning",
+    "summary": "Immediate steps when someone pressures you to pay, share a code, or approve access.",
+    "immediate_actions": [
+      "Pause. Do not send money, approve a request, or share a one-time code.",
+      "Move away from the message or call and do not use its links or phone numbers.",
+      "If a bank, wallet, or account may be affected, contact that provider through an independently located channel."
+    ],
+    "preserve_evidence": [
+      "Keep the original message, sender details, timestamps, receipts, and transaction references.",
+      "Do not edit or forward evidence if doing so could expose a password, PIN, or one-time code."
+    ],
+    "recovery_actions": [
+      "Change affected credentials from a known-safe device and sign out other sessions where supported.",
+      "Ask the provider what containment and reversal options are available.",
+      "Monitor statements and account notices for further activity."
+    ],
+    "escalation_guidance": [
+      "If there is immediate physical danger, use your device's emergency function or a local emergency service you already know.",
+      "Use an official reporting destination only after independently checking its source and destination.",
+      "A trusted person can help preserve evidence and slow down further contact."
+    ],
+    "review_status": "pending_editorial_review",
+    "content_version": "1.0.0",
+    "language": {"requested_language": "en", "content_language": "en", "fallback_used": false}
+  },
+  {
+    "id": "account-takeover",
+    "title": "Possible account takeover",
+    "summary": "Contain access changes without following instructions from the suspicious message.",
+    "immediate_actions": [
+      "Stop responding and do not share a recovery code or approve an unexpected sign-in.",
+      "Open the provider's app or website using a known bookmark or manually entered address.",
+      "Check security alerts and active sessions from that trusted route."
+    ],
+    "preserve_evidence": [
+      "Record the time, device, alert wording, and visible account changes.",
+      "Keep suspicious messages available for later reporting without opening additional links."
+    ],
+    "recovery_actions": [
+      "Use the provider's account-recovery process and update credentials from a safe device.",
+      "Review recovery email addresses, phone numbers, payment methods, and active sessions.",
+      "Tell contacts through a trusted channel if the account may have sent messages without your control."
+    ],
+    "escalation_guidance": [
+      "Contact the provider through its independently verified support path.",
+      "Ask a trusted person to help if you are being pressured or cannot distinguish a genuine alert."
+    ],
+    "review_status": "pending_editorial_review",
+    "content_version": "1.0.0",
+    "language": {"requested_language": "en", "content_language": "en", "fallback_used": false}
+  }
+]

@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from alembic import command
 from alembic.config import Config
 from app.database import Base
+from app.catalog_models import CatalogBase
 from app.models import User, Analysis
 from app.privacy_models import PrivacyJob
 from app.privacy_jobs import process_job
@@ -71,8 +72,8 @@ def pg_client(postgres):
 def test_postgres_migration_metadata_and_integrity(postgres):
     engine, _ = postgres
     with engine.connect() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "0003"
-        assert compare_metadata(MigrationContext.configure(db), Base.metadata) == []
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "0005"
+        assert compare_metadata(MigrationContext.configure(db), [Base.metadata, CatalogBase.metadata]) == []
 
 
 def test_postgres_concurrent_privacy_rate_limit(postgres):

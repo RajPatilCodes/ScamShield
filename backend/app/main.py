@@ -4,7 +4,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.responses import JSONResponse
 
-from .routes import analysis, auth, media, uploads
+from .routes import analysis, auth, catalog, media, uploads
 
 from .config import settings
 from .routes import privacy
@@ -61,6 +61,7 @@ app.include_router(analysis.router)
 app.include_router(uploads.router)
 app.include_router(media.router)
 app.include_router(privacy.router)
+app.include_router(catalog.router)
 
 
 @app.get("/health")

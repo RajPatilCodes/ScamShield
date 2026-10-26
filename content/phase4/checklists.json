@@ -1,0 +1,3 @@
+[
+  {"id":"checklist-first-response","language":"en","title":"First response checklist","summary":"A bounded local checklist for the first few minutes after a warning sign.","items":[{"id":"stop","label":"Stop the requested payment, login, download, or reply."},{"id":"protect","label":"Do not share passwords, PINs, one-time codes, or recovery phrases."},{"id":"verify","label":"Verify through a contact method you already trust."},{"id":"record","label":"Keep relevant messages, dates, receipts, and account notices."},{"id":"report","label":"Use a reporting destination only after checking it independently."}],"content_version":"1.0.0","review_status":"pending_editorial_review","next_review_at":null}
+]

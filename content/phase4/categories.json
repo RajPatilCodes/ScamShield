@@ -1,0 +1,7 @@
+[
+  {"id":"payments","language":"en","title":"Payments and accounts","summary":"Pause and verify before sharing payment or account information.","sort_order":1},
+  {"id":"offers","language":"en","title":"Offers and requests","summary":"Recognize pressure, impersonation, and unexpected requests.","sort_order":2},
+  {"id":"messages","language":"en","title":"Messages and devices","summary":"Check links, apps, devices, and messages before taking action.","sort_order":3},
+  {"id":"identity","language":"en","title":"Identity and recovery","summary":"Protect identity, access, and recovery channels after a warning sign.","sort_order":4},
+  {"id":"coordination","language":"en","title":"Coordinated abuse","summary":"Handle coercion, money movement, and account takeover safely.","sort_order":5}
+]

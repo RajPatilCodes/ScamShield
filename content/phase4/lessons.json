@@ -1,0 +1,50 @@
+[
+  {
+    "id": "lesson-pause-verify",
+    "language": "en",
+    "title": "Pause, verify, and protect",
+    "summary": "A short routine for slowing down a pressured request.",
+    "sections": [
+      {"heading": "Pause", "body": "Stop the requested action and avoid replying through the same channel."},
+      {"heading": "Verify", "body": "Use a trusted contact method you already know, not a destination supplied by the message."},
+      {"heading": "Protect", "body": "Do not share passwords, PINs, one-time codes, or recovery phrases."}
+    ],
+    "knowledge_checks": [
+      {
+        "id": "pause-verify-q1",
+        "question": "A caller says you must act immediately. What is the safest first step?",
+        "options": ["Pause and verify through a known channel", "Share the code so the account is not closed", "Forward the message to several contacts"],
+        "correct_option": 0,
+        "explanation": "Pressure is a reason to slow down. Do not use contact details supplied by the unexpected request."
+      }
+    ],
+    "sources": [],
+    "content_version": "1.0.0",
+    "review_status": "pending_editorial_review",
+    "next_review_at": null
+  },
+  {
+    "id": "lesson-recovery-basics",
+    "language": "en",
+    "title": "Recovery basics",
+    "summary": "Steps to take when an account, payment, or device may be affected.",
+    "sections": [
+      {"heading": "Contain", "body": "Stop further interaction, secure the affected account, and contact the relevant provider through a known channel."},
+      {"heading": "Record", "body": "Keep dates, messages, receipts, and account notices without forwarding sensitive secrets."},
+      {"heading": "Report", "body": "Use an independently located official reporting path when one has been verified."}
+    ],
+    "knowledge_checks": [
+      {
+        "id": "recovery-basics-q1",
+        "question": "What should you preserve after a suspicious payment or account request?",
+        "options": ["Messages, dates, receipts, and transaction references", "Your password in the report", "A forwarded copy containing a one-time code"],
+        "correct_option": 0,
+        "explanation": "Preserve useful records while keeping passwords, PINs, and one-time codes private."
+      }
+    ],
+    "sources": [],
+    "content_version": "1.0.0",
+    "review_status": "pending_editorial_review",
+    "next_review_at": null
+  }
+]

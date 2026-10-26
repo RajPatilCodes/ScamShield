@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
 import 'services/api_service.dart';
-import 'screens/deletion_status_screen.dart';
+import 'screens/guest_home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -89,12 +88,7 @@ class _ScamShieldAppState extends State<ScamShieldApp> {
         }
         if (snapshot.connectionState != ConnectionState.done) return const Scaffold(body: Center(child: CircularProgressIndicator()));
         return HomeScreen(api: widget.api);
-      }) : Scaffold(body: Column(children: [
-        Expanded(child: AuthScreen(api: widget.api)),
-        Builder(builder: (context) => TextButton(onPressed: () => Navigator.push(context,
-          MaterialPageRoute(builder: (_) => DeletionStatusScreen(privacy: widget.api.privacy))),
-          child: const Text('Account-deletion status'))),
-      ])),
+      }) : GuestHomeScreen(api: widget.api),
     );
   }
 }

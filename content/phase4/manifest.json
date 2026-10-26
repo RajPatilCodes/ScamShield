@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "revision": 1,
+  "jurisdiction": "IN",
+  "languages": ["en", "hi"],
+  "publication_status": "draft",
+  "content_digest": "b715caf61b1a4b1a36cab76a8a6a593560f4f1708f1fdc842ae65192a7689737",
+  "files": {
+    "categories": "categories.json",
+    "guides": [
+      "guides/SC-001.json", "guides/SC-002.json", "guides/SC-003.json", "guides/SC-004.json", "guides/SC-005.json", "guides/SC-006.json",
+      "guides/SC-007.json", "guides/SC-008.json", "guides/SC-009.json", "guides/SC-010.json", "guides/SC-011.json", "guides/SC-012.json", "guides/SC-013.json",
+      "guides/SC-014.json", "guides/SC-015.json", "guides/SC-016.json", "guides/SC-017.json", "guides/SC-018.json", "guides/SC-019.json",
+      "guides/SC-020.json", "guides/SC-021.json", "guides/SC-022.json", "guides/SC-023.json", "guides/SC-024.json", "guides/SC-025.json", "guides/SC-026.json",
+      "guides/SC-027.json", "guides/SC-028.json", "guides/SC-029.json", "guides/SC-030.json", "guides/SC-031.json", "guides/SC-032.json", "guides/SC-033.json"
+    ],
+    "playbooks": "emergency.json",
+    "lessons": "lessons.json",
+    "checklists": "checklists.json",
+    "resources": "resources.json"
+  }
+}
